@@ -22,13 +22,14 @@
 #include <glib.h>
 #include <gdk/gdk.h>
 #include <gtk/gtk.h>
-
+#include <stdarg.h>
 
 #include "global.h"
 #include "app.h"
+#include "blacklist.h"
+#include "view.h"
 #include "rom.h"
 #include "mame.h"
-#include "view.h"
 #include "ui.h"
 #include "config.h"
 #include "pref.h"
@@ -51,18 +52,20 @@ GdkPixbuf *rom_tileRank = NULL;
 // rom (all, NO BIOS)
 GList *rom_romList = NULL;
 
-static guint rom_count = 0; // nTot rom + clone (NO BIOS)
-static guint rom_available = 0; // nTot rom available (NO CLONE) (NO BIOS)
+static guint rom_count = 0;     // nTot rom + clone (NO BLACKLISTED)
+static guint rom_available = 0; // nTot rom available (NO CLONE) (NO BLAKCLISTED)
 
-// clone (only clone, NO BIOS)
+// clone (only clone, NO BLACKLISTED)
 GHashTable* rom_cloneTable = NULL;
+
+GHashTable* rom_parentTableSearch = NULL;  // for searching name romname key=PARENT, data=description ronmname
+GHashTable* rom_parentTable       = NULL;  // key=PARENT, data=description (ronmname)
 
 static enum rom_sortOrder rom_sortOrder = ROM_SORT_AZ;
 
-static int
+inline static int
 rom_sortAZ (struct rom_romItem *itemA, struct rom_romItem *itemB)
 {
-
     gchar* romA = g_utf8_casefold ((gchar*) itemA->desc, -1);
     gchar* romB = g_utf8_casefold ((gchar*) itemB->desc, -1);
 
@@ -74,7 +77,7 @@ rom_sortAZ (struct rom_romItem *itemA, struct rom_romItem *itemB)
     return result;
 }
 
-static int
+inline static int
 rom_sortZA (struct rom_romItem *itemA, struct rom_romItem *itemB)
 {
     gchar *romA = g_utf8_casefold ((gchar*) itemA->desc, -1);
@@ -100,9 +103,6 @@ rom_setSort (enum rom_sortOrder order)
 {
     rom_sortOrder = order;
 
-#ifdef DEBUG_TIMING
-    logTimer ("start sorting");
-#endif
     g_print ("sorting romlist... ");
     switch (order) {
     case ROM_SORT_AZ:
@@ -116,9 +116,6 @@ rom_setSort (enum rom_sortOrder order)
         break;
     }
     g_print (SUCCESS_MSG "\n");
-#ifdef DEBUG_TIMING
-    logTimer ("sorting time");
-#endif
 
 }
 
@@ -149,38 +146,47 @@ void
 rom_init (void)
 {
     /* pixbuf */
-    if (g_str_has_prefix (cfg_keyStr ("TILE_PATH"), "~")) {
-        rom_tilePath = g_strdup_printf ("%s%s", g_get_home_dir (), cfg_keyStr ("TILE_PATH")+1);
-    } else {
-        rom_tilePath = g_strdup_printf ("%s", cfg_keyStr ("TILE_PATH"));
-    }
+    rom_tilePath = g_strdup (cfg_keyStr ("TILE_PATH"));
 
-    g_assert(!rom_tileNoImage);
+    g_assert (!rom_tileNoImage);
     rom_tileNoImage = gdk_pixbuf_new_from_file_at_size (APP_RESOURCE APP_NOIMAGE, ui_tileSize_W, ui_tileSize_H, NULL);
-    g_assert(rom_tileNoImage);
+    g_assert (rom_tileNoImage);
 
-    g_assert(!rom_tileNowShowing);
+    g_assert (!rom_tileNowShowing);
     rom_tileNowShowing = gdk_pixbuf_new_from_file_at_size (APP_RESOURCE APP_NOWSHOWING, ui_tileSize_W, ui_tileSize_H, NULL);
-    g_assert(rom_tileNowShowing);
+    g_assert (rom_tileNowShowing);
 
-    g_assert(!rom_tileLoading);
+    g_assert (!rom_tileLoading);
     rom_tileLoading = gdk_pixbuf_new_from_file_at_size (APP_RESOURCE APP_LOADING, ui_tileSize_W, ui_tileSize_H, NULL);
-    g_assert(rom_tileLoading);
+    g_assert (rom_tileLoading);
 
-    g_assert(!rom_tileFavorite);
+    g_assert (!rom_tileFavorite);
     rom_tileFavorite = gdk_pixbuf_new_from_file (APP_RESOURCE APP_PREFERRED, NULL);
-    g_assert(rom_tileFavorite);
+    g_assert (rom_tileFavorite);
 
-    g_assert(!rom_tileRank);
+    g_assert (!rom_tileRank);
     rom_tileRank = gdk_pixbuf_new_from_file (APP_RESOURCE APP_RANK, NULL);
-    g_assert(rom_tileRank);
+    g_assert (rom_tileRank);
 
     rom_count = 0;
     g_assert (!rom_romList);
 
-    g_assert(!rom_cloneTable);
+    g_assert (!rom_cloneTable);
     rom_cloneTable = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
-    g_assert(rom_cloneTable);
+    g_assert (rom_cloneTable);
+
+    g_assert (!rom_parentTableSearch);
+    rom_parentTableSearch = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
+    g_assert (rom_parentTableSearch);
+
+    g_assert (!rom_parentTable);
+    rom_parentTable = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
+    g_assert (rom_parentTable);
+
+//    g_print ("rom download %s\n", cfg_keyBool ("ROM_DOWNLOAD") ? SUCCESS_MSG : FAIL_MSG);
+//    g_print ("chd download %s\n", cfg_keyBool ("CHD_DOWNLOAD") ? SUCCESS_MSG : FAIL_MSG);
+
+    blist_init ();
  }
 
 void
@@ -211,19 +217,23 @@ rom_free (void)
 
     g_hash_table_destroy (rom_cloneTable);
     rom_cloneTable = NULL;
+
+    g_hash_table_destroy (rom_parentTableSearch);
+    rom_parentTableSearch = NULL;
+
+    g_hash_table_destroy (rom_parentTable);
+    rom_parentTable = NULL;
+
+    blist_free();
  }
 
  void
  rom_load (void)
  {
     mame_gameList ();
-
-    rom_romList = g_list_reverse (rom_romList);
-
     if ((rom_count <= 0) || (rom_available <=0)) {
         ui_showInfobar ();
     }
-
  }
 
 inline gboolean
@@ -245,7 +255,7 @@ rom_parentOf (const gchar *romName)
 }
 
 
-inline struct rom_romItem*
+struct rom_romItem*
 rom_newItem (void)
 {
     struct rom_romItem* item = g_new (struct rom_romItem, 1);
@@ -267,17 +277,17 @@ rom_newItem (void)
     return item;
 }
 
-inline struct rom_romItem*
+
+struct rom_romItem*
 rom_getItem (int numGame)
 {
     g_assert (numGame < rom_count);
     return g_list_nth_data (rom_romList, numGame);
 }
 
-inline void
+void
 rom_setItemRomFound (struct rom_romItem* item, gboolean value)
 {
-
     if (value) {
         if (!item->romFound) rom_available++;
     } else {
@@ -301,17 +311,14 @@ rom_setItemName (struct rom_romItem* item, gchar* name)
 inline void
 rom_setItemDescription (struct rom_romItem* item, gchar* description)
 {
+    // for searching
     item->description = g_strdup (description);
-}
 
-inline void
-rom_setItemDesc (struct rom_romItem* item, gchar* desc)
-{
-
+    // for sorting/view
     if (cfg_keyBool ("TILE_SHORT_DESCRIPTION")) {
 
         // hide " (" information
-        gchar **romdesv = g_strsplit (desc, " (", 2);
+        gchar **romdesv = g_strsplit (description, " (", 2);
 
         if (cfg_keyBool ("TILE_SHORT_DESCRIPTION_HIDE_PREFIX")) {
 
@@ -324,6 +331,9 @@ rom_setItemDesc (struct rom_romItem* item, gchar* desc)
             } else if (g_str_has_prefix (romdesv[0], "VS ")) {
                 // hide the prefix "VS "
                 item->desc = g_strdup_printf ("%s, VS", romdesv[0] + 3);
+            } else if (g_str_has_prefix (romdesv[0], "'")) {
+                // hide the prefix "'88"
+                item->desc = g_strdup_printf ("%s", romdesv[0] + 1);
             } else {
                 item->desc = g_strdup (romdesv[0]);
             }
@@ -333,7 +343,7 @@ rom_setItemDesc (struct rom_romItem* item, gchar* desc)
         }
         g_strfreev (romdesv);
     } else {
-        item->desc = g_strdup (desc);
+        item->desc = g_strdup (description);
     }
 }
 
@@ -440,7 +450,6 @@ rom_fileRead_cb (GFile *file, GAsyncResult *res, struct rom_romItem *item)
 
         }
     }
-
 }
 
 static void
@@ -483,8 +492,8 @@ rom_loadItemAsync (struct rom_romItem* item)
 
     g_assert (g_file_test (rom_tilePath, G_FILE_TEST_IS_DIR));
 
-    gchar *fileNamePng = g_strdup_printf ("%s%s.%s", rom_tilePath, romName, TILE_EXTENSION_PNG);
-    gchar *fileNameJpg = g_strdup_printf ("%s%s.%s", rom_tilePath, romName, TILE_EXTENSION_JPG);
+    gchar *fileNamePng = g_strdup_printf ("%s/%s.%s", rom_tilePath, romName, TILE_EXTENSION_PNG);
+    gchar *fileNameJpg = g_strdup_printf ("%s/%s.%s", rom_tilePath, romName, TILE_EXTENSION_JPG);
 
     // web downloaded (png)
     gchar *fileNameWWW = www_getFileNameWWW (romName);
@@ -537,6 +546,223 @@ rom_invalidateUselessTile (void)
     }
 }
 
+
+gint
+rom_search (GList* viewModel, gint focus, const gchar* romDes, gboolean forward)
+{
+    gchar *searchItm = g_utf8_strup (romDes, -1);
+    gchar *search;
+
+    if (forward) {
+        focus++;
+        // forward
+        // focus to end
+        for (GList *l = g_list_nth (viewModel, focus); l != NULL; l = l->next) {
+            struct rom_romItem *item = l->data;
+
+            // description
+            search = g_utf8_strup (item->description, -1);
+            if (g_strrstr (search, searchItm)) {
+                g_free (searchItm);
+                g_free (search);
+                return g_list_position ((GList*) viewModel, l);
+            }
+            g_free (search);
+
+            // romname
+            search = g_utf8_strup (item->name, -1);
+            if (g_strrstr (search, searchItm)) {
+                g_free (searchItm);
+                g_free (search);
+                return g_list_position ((GList*) viewModel, l);
+            }
+            g_free (search);
+
+            // clone (romnane + description)
+            if (rom_isParent (item->name)) {
+                if (g_hash_table_contains (rom_parentTableSearch, item->name)) {
+                    search = g_hash_table_lookup (rom_parentTableSearch, item->name);
+                    if (g_strrstr (search, searchItm)) {
+                        g_free (searchItm);
+                        return g_list_position ((GList*) viewModel, l);
+                    }
+                }
+            }
+
+        }
+
+        // start to focus
+        for (GList *l = g_list_first (viewModel); l != g_list_nth (viewModel, focus); l = l->next) {
+            struct rom_romItem *item = l->data;
+
+            // description
+            search = g_utf8_strup (item->description, -1);
+            if (g_strrstr (search, searchItm)) {
+                g_free (searchItm);
+                g_free (search);
+                return g_list_position ((GList*) viewModel, l);
+            }
+            g_free (search);
+
+            // romname
+            search = g_utf8_strup (item->name, -1);
+            if (g_strrstr (search, searchItm)) {
+                g_free (searchItm);
+                g_free (search);
+                return g_list_position ((GList*) viewModel, l);
+            }
+            g_free (search);
+
+            // clone (romnane + description)
+            if (rom_isParent (item->name)) {
+                if (g_hash_table_contains (rom_parentTableSearch, item->name)) {
+                    search = g_hash_table_lookup (rom_parentTableSearch, item->name);
+                    if (g_strrstr (search, searchItm)) {
+                        g_free (searchItm);
+                        return g_list_position ((GList*) viewModel, l);
+                    }
+                }
+            }
+
+        }
+    } else {
+        focus = posval (--focus);
+        // backward
+        // focus to start
+        for (GList *l = g_list_nth (viewModel, focus); l != NULL; l = l->prev) {
+            struct rom_romItem *item = l->data;
+
+            // description
+            search = g_utf8_strup (item->description, -1);
+            if (g_strrstr (search, searchItm)) {
+                g_free (searchItm);
+                g_free (search);
+                return g_list_position ((GList*) viewModel, l);
+            }
+            g_free (search);
+
+            // name
+            search = g_utf8_strup (item->name, -1);
+            if (g_strrstr (search, searchItm)) {
+                g_free (searchItm);
+                g_free (search);
+                return g_list_position ((GList*) viewModel, l);
+            }
+            g_free (search);
+
+            // clone (romnane + description)
+            if (rom_isParent (item->name)) {
+                if (g_hash_table_contains (rom_parentTableSearch, item->name)) {
+                    search = g_hash_table_lookup (rom_parentTableSearch, item->name);
+                    if (g_strrstr (search, searchItm)) {
+                        g_free (searchItm);
+                        return g_list_position ((GList*) viewModel, l);
+                    }
+                }
+            }
+        }
+
+        // end to focus
+        for (GList *l = g_list_last (viewModel); l != g_list_nth (viewModel, focus); l = l->prev) {
+            struct rom_romItem *item = l->data;
+
+            // description
+            search = g_utf8_strup (item->description, -1);
+            if (g_strrstr (search, searchItm)) {
+                g_free (searchItm);
+                g_free (search);
+                return g_list_position ((GList*) viewModel, l);
+            }
+            g_free (search);
+
+            // name
+            search = g_utf8_strup (item->name, -1);
+            if (g_strrstr (search, searchItm)) {
+                g_free (searchItm);
+                g_free (search);
+                return g_list_position ((GList*) viewModel, l);
+            }
+            g_free (search);
+
+            // clone (romnane + description)
+            if (rom_isParent (item->name)) {
+                if (g_hash_table_contains (rom_parentTableSearch, item->name)) {
+                    search = g_hash_table_lookup (rom_parentTableSearch, item->name);
+                    if (g_strrstr (search, searchItm)) {
+                        g_free (searchItm);
+                        return g_list_position ((GList*) viewModel, l);
+                    }
+                }
+            }
+
+        }
+    }
+
+    g_free (searchItm);
+    return -1;
+}
+
+gint
+rom_search_letter (GList* viewModel, gint focus, const gchar* romStartWithLetter, gboolean forward)
+{
+    gchar *searchItm = g_utf8_strup (romStartWithLetter, -1);
+
+    if (forward) {
+        focus++;
+        // focus to end
+        for (GList *l = g_list_nth (viewModel, focus); l != NULL; l = l->next) {
+            struct rom_romItem *item = l->data;
+            gchar *search = g_utf8_strup (item->desc, -1);
+            if (g_str_has_prefix (search, searchItm)) {
+                g_free (searchItm);
+                g_free (search);
+                return g_list_position ((GList*) viewModel, l);
+            }
+            g_free (search);
+        }
+
+        // start to focus
+        for (GList *l = g_list_first (viewModel); l != g_list_nth (viewModel, focus); l = l->next) {
+            struct rom_romItem *item = l->data;
+            gchar *search = g_utf8_strup (item->desc, -1);
+            if (g_str_has_prefix (search, searchItm)) {
+                g_free (searchItm);
+                g_free (search);
+                return g_list_position ((GList*) viewModel, l);
+            }
+            g_free (search);
+        }
+    } else {
+        focus = posval (--focus);
+        // focus to start
+        for (GList *l = g_list_nth (viewModel, focus); l != NULL; l = l->prev) {
+            struct rom_romItem *item = l->data;
+            gchar *search = g_utf8_strup (item->desc, -1);
+            if (g_str_has_prefix (search, searchItm)) {
+                g_free (searchItm);
+                g_free (search);
+                return g_list_position ((GList*) viewModel, l);
+            }
+            g_free (search);
+        }
+
+        // end to focus
+        for (GList *l = g_list_last (viewModel); l != g_list_nth (viewModel, focus); l = l->prev) {
+            struct rom_romItem *item = l->data;
+            gchar *search = g_utf8_strup (item->desc, -1);
+            if (g_str_has_prefix (search, searchItm)) {
+                g_free (searchItm);
+                g_free (search);
+                return g_list_position ((GList*) viewModel, l);
+            }
+            g_free (search);
+        }
+    }
+
+    g_free (searchItm);
+    return -1;
+}
+
 inline gboolean
 rom_getItemPref (const struct rom_romItem *item)
 {
@@ -573,24 +799,43 @@ rom_setItemNPlay (struct rom_romItem *item, guint nplay)
     item->nplay = nplay;
 }
 
-inline gboolean
-rom_filterBios (const gchar *romDes)
+gboolean
+rom_FoundInPath (const gchar* romName, ...)
 {
-    gboolean filtered = FALSE;
+    gboolean foundRom = FALSE;
 
-    gchar *des = g_utf8_strup (romDes, -1);
-    gchar **romdesv = g_strsplit (des, " (", 2);
+    gchar *romNameZip;
+    gchar *romName7Zip;
+    gchar *romNameDir;
 
-    const gchar* bios = g_strrstr (romdesv[0], "BIOS");
+    va_list vl;
+    va_start (vl, romName);
 
-    if (bios) {
-        // g_print ("\nfilter:%s\n", romdesv[0]);
-        filtered = TRUE;
+    gchar *romPath = va_arg (vl, gchar*);
+
+    while (romPath && !foundRom) {
+        romNameZip = g_strdup_printf ("%s/%s.%s", romPath, romName, ROM_EXTENSION_ZIP);
+        romName7Zip = g_strdup_printf ("%s/%s.%s", romPath, romName, ROM_EXTENSION_7ZIP);
+        romNameDir = g_strdup_printf ("%s/%s", romPath, romName);
+
+        if (g_file_test (romName7Zip, G_FILE_TEST_EXISTS)) {
+            foundRom = TRUE;
+        } else if (g_file_test (romNameZip, G_FILE_TEST_EXISTS)) {
+            foundRom = TRUE;
+        } else if (g_file_test (romNameDir, G_FILE_TEST_IS_DIR)) {
+            foundRom = TRUE;
+        } else {
+            //g_print ("\nrom not found: %s " FAIL_MSG "\n", romName);
+        }
+
+        romPath = va_arg (vl, gchar*);
+
+        g_free (romNameZip);
+        g_free (romName7Zip);
+        g_free (romNameDir);
     }
 
-    g_free (des);
-    g_strfreev (romdesv);
+    va_end (vl);
 
-    return filtered;
+    return foundRom;
 }
-

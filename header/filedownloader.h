@@ -19,18 +19,30 @@
  */
 
 
-/* www.h */
-#ifndef WWW_H
-#define WWW_H
+/* filedownloader.h */
+#ifndef FD_H
+#define FD_H
 
-gboolean www_autoDownload;
-gchar*	 www_tilePath;
-gint     www_downloadingItm;
+struct fd_copyInfo {
+	// input
+	gchar *iFileName;
+	GFile *iFile;
 
-void www_init (void);
-void www_free (void);
-void www_download (struct rom_romItem* item);
-gchar* www_getFileNameWWW (const gchar* romName);
+	// output
+	gchar *oFileName;
+	GFile *oFile;
+};
+
+gint fd_downloadingItm;
+
+void fd_init (void);
+void fd_free (void);
+void fd_downloadRom (const gchar* romName);
+
+void fd_findAndDownloadChd (const gchar* romName);
+
+const gchar* fd_getDownloadPathRom (void);
+const gchar* fd_getDownloadPathChd (void);
 
 #endif
 

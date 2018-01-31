@@ -19,18 +19,45 @@
  */
 
 
-/* www.h */
-#ifndef WWW_H
-#define WWW_H
+/* joy.h */
+#ifndef JOY_H
+#define JOY_H
 
-gboolean www_autoDownload;
-gchar*	 www_tilePath;
-gint     www_downloadingItm;
+struct Tjoy {
+	gchar           *name;  // name
+	struct libevdev *dev;   // /etc/device
+	GIOChannel      *gio;   // g_io channel
+	guint            watch; // watch (event id)
 
-void www_init (void);
-void www_free (void);
-void www_download (struct rom_romItem* item);
-gchar* www_getFileNameWWW (const gchar* romName);
+	// joy controls
+	gint MAX_ABS_X;
+	gint MIN_ABS_X;
+
+	gint MAX_ABS_Y;
+	gint MIN_ABS_Y;
+
+	// autorepeat X, Y
+	gint64 utimeX;
+	gint64 utimeY;
+	gboolean callback;
+
+	// move
+	gboolean up;
+	gboolean down;
+	gboolean left;
+	gboolean right;
+};
+
+extern GList *joy_list;
+extern guint  joy_count;
+
+void joy_init  (void);
+void joy_free  (void);
+gboolean joy_event (void);
+void joy_debug (struct Tjoy *item);
+gboolean joy_debugFull (void);
+
+
 
 #endif
 

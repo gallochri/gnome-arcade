@@ -54,6 +54,7 @@ max (gint a, gint b)
     return (a >= b? a: b);
 }
 
+__attribute__ ((hot))
 inline gboolean
 pointInside (gint x, gint y, gint ax, gint ay, gint bx, gint by)
 {
@@ -65,9 +66,6 @@ pointInside (gint x, gint y, gint ax, gint ay, gint bx, gint by)
     }
 }
 
-
-#ifdef DEBUG_TIMING
-
 inline void
 logTimer (const gchar* message)
 {
@@ -78,4 +76,3 @@ logTimer (const gchar* message)
     g_print ("*%s* %s\n", date, message);
     g_free (date);
 }
-#endif

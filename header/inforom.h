@@ -19,18 +19,25 @@
  */
 
 
-/* www.h */
-#ifndef WWW_H
-#define WWW_H
+/* inforom.h */
+#ifndef INFOROM_H
+#define INFOROM_H
 
-gboolean www_autoDownload;
-gchar*	 www_tilePath;
-gint     www_downloadingItm;
+struct inforom_info {
 
-void www_init (void);
-void www_free (void);
-void www_download (struct rom_romItem* item);
-gchar* www_getFileNameWWW (const gchar* romName);
+	gchar *name;
+	gchar *description;
+	gchar *manufacturer;
+	gchar *year;
+	gchar *romOf;
+	gchar *srcFile;
+	gboolean chd;
+};
+
+struct inforom_info *inforom_build (const gchar *romName, const gchar* description, const gchar* manufacturer, const gchar* year, const gchar* romOf, const gchar* srcFile,gboolean chd);
+void inforom_free (struct inforom_info *info);
+void inforom_show (struct rom_romItem *item);
 
 #endif
+
 

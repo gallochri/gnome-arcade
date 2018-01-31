@@ -19,18 +19,14 @@
  */
 
 
-/* www.h */
-#ifndef WWW_H
-#define WWW_H
+/* filter.h */
+#ifndef BLACKLIST_H
+#define BLACKLIST_H
 
-gboolean www_autoDownload;
-gchar*	 www_tilePath;
-gint     www_downloadingItm;
+void blist_init (void);
+void blist_free (void);
 
-void www_init (void);
-void www_free (void);
-void www_download (struct rom_romItem* item);
-gchar* www_getFileNameWWW (const gchar* romName);
+gboolean blist_skipRom (const gchar *romName);
 
 #endif
 

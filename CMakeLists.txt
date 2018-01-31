@@ -2,12 +2,16 @@
 #   cd gnome-arcade/build
 #
 #	cmake ..
+#   OR
+#   cmake -DCMAKE_C_FLAGS="-Ofast -march=native -fomit-frame-pointer -flto -fwhole-program -frename-registers" ..
+#   OR
+# 	cmake -DCMAKE_C_FLAGS="-O3 -march=native" ..
 #	OR
 # 	cmake -DAPP_RES=\"/usr/share/gnome-arcade\" -DCMAKE_C_FLAGS="-g -O2" ..
 #	OR
 # 	cmake -DMAME_BIN=\"/usr/games/mame\" -DCMAKE_C_FLAGS="-g -O2" ..
 #	OR
-#	cmake -DAPP_RES=\"/usr/share/gnome-arcade\" -DCMAKE_C_FLAGS="-g -O2 -fmessage-length=0 -D_FORTIFY_SOURCE=2 -fstack-protector -funwind-tables -fasynchronous-unwind-tables" ..
+#	cmake -DAPP_RES=\"/usr/share/gnome-arcade\" -DCMAKE_C_FLAGS="-g -O2 -D_FORTIFY_SOURCE=2 -fstack-protector -funwind-tables -fasynchronous-unwind-tables" ..
 #
 #	make
 
@@ -43,11 +47,21 @@ MESSAGE(STATUS "CMAKE_C_FLAGS:" ${CMAKE_C_FLAGS})
 # GTK
 # Use the package PkgConfig to detect GTK+ headers/library files
 find_package(PkgConfig REQUIRED)
-pkg_check_modules(GTK3 REQUIRED gtk+-3.0>=3.10)
+pkg_check_modules(GTK3 REQUIRED gtk+-3.0>=3.20)
+pkg_check_modules(PC_LIBEVDEV REQUIRED libevdev)
+pkg_check_modules (LIBVLC REQUIRED libvlc)
 
 include_directories(${GTK3_INCLUDE_DIRS})
 link_directories(${GTK3_LIBRARY_DIRS})
 add_definitions(${GTK3_CFLAGS_OTHER})
+
+include_directories(${PC_LIBEVDEV_INCLUDE_DIRS})
+link_directories(${PC_LIBEVDEV_LIBRARY_DIRS})
+add_definitions(${PC_LIBEVDEV_CFLAGS_OTHER})
+
+include_directories(${LIBVLC_INCLUDE_DIRS})
+link_directories(${LIBVLC_LIBRARY_DIRS})
+add_definitions(${LIBVLC_CFLAGS_OTHER})
 
 # Add src
 add_subdirectory(src)

@@ -39,22 +39,26 @@ static const gchar* www_webProvider = NULL;
 void
 www_init (void)
 {
+    www_downloadingItm = 0;
+    /*
     if (g_str_has_prefix (cfg_keyStr ("WEB_PATH"), "~")) {
-        www_tilePath = g_strdup_printf ("%s%s", g_get_home_dir (), cfg_keyStr ("WEB_PATH") + 1);
+        www_tilePath = g_strdup_printf ("%s%s/", g_get_home_dir (), cfg_keyStr ("WEB_PATH") + 1);
     } else {
-        www_tilePath = g_strdup_printf ("%s", cfg_keyStr ("WEB_PATH"));
+        www_tilePath = g_strdup_printf ("%s/", cfg_keyStr ("WEB_PATH"));
     }
+    */
+    www_tilePath = g_strdup (cfg_keyStr ("WEB_PATH"));
 
-    if (cfg_keyBool ("WEB_DOWNLOAD")) {
+    if (cfg_keyBool ("TILE_DOWNLOAD")) {
 		www_autoDownload = TRUE;
     } else {
 		www_autoDownload = FALSE;
     }
-	g_print ("web download %s\n", www_autoDownload ? SUCCESS_MSG : FAIL_MSG);
+	g_print ("tile download %s\n", www_autoDownload ? SUCCESS_MSG : FAIL_MSG);
 
-	www_webProvider = cfg_keyStr ("WEB_PROVIDER");
+	www_webProvider = cfg_keyStr ("TILE_PROVIDER");
 	if (www_autoDownload) {
-		g_print ("web provider %s\n", www_webProvider);
+		g_print ("tile provider %s\n", www_webProvider);
 	}
 
     if (g_mkdir_with_parents (www_tilePath, 0700) != 0) {
@@ -65,13 +69,14 @@ www_init (void)
 void
 www_free (void)
 {
+    g_assert (www_downloadingItm == 0);
 	g_free (www_tilePath);
     www_tilePath = NULL;
     www_autoDownload = FALSE;
     www_webProvider = NULL;
 }
 
-static void
+inline static void
 www_closeStream_cb (GObject *source_object, GAsyncResult *res, gpointer user_data)
 {
     g_input_stream_close_finish (G_INPUT_STREAM (source_object), res, NULL);
@@ -112,6 +117,7 @@ www_pixbufRead_cb (GObject *source_object, GAsyncResult *res, struct rom_romItem
     if (ui_tileIsVisible (item)) {
         ui_invalidateDrawingArea ();
     }
+    www_downloadingItm--;
 }
 
 static void
@@ -138,26 +144,27 @@ www_fileRead_cb (GFile *file, GAsyncResult *res, struct rom_romItem *item)
         if (ui_tileIsVisible (item)) {
             ui_invalidateDrawingArea ();
         }
+        www_downloadingItm--;
     }
 }
 
 void
 www_download (struct rom_romItem* item)
 {
+    www_downloadingItm++;
+
 	gchar *fileNameWeb = g_strdup_printf (www_webProvider, item->name);
-	g_print ("fetching [%s] %s\n", item->name, fileNameWeb);
+	g_print ("fetching(%i) [%s] %s\n", www_downloadingItm, item->name, fileNameWeb);
 
 	GFile *tileFile = g_file_new_for_uri (fileNameWeb);
 
     g_file_read_async (tileFile, G_PRIORITY_HIGH, FALSE, (GAsyncReadyCallback) www_fileRead_cb, item);
 
 	g_free (fileNameWeb);
-
 }
 
 inline gchar*
 www_getFileNameWWW (const gchar* romName)
 {
-	return g_strdup_printf ("%s%s.%s", www_tilePath, romName, WWW_EXTENSION_PNG);
+	return g_strdup_printf ("%s/%s.%s", www_tilePath, romName, WWW_EXTENSION_PNG);
 }
-

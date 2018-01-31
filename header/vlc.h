@@ -19,18 +19,16 @@
  */
 
 
-/* www.h */
-#ifndef WWW_H
-#define WWW_H
+/* vlc.h */
+#ifndef VLC_H
+#define VLC_H
 
-gboolean www_autoDownload;
-gchar*	 www_tilePath;
-gint     www_downloadingItm;
+void vlc_init (void);
+void vlc_free (void);
 
-void www_init (void);
-void www_free (void);
-void www_download (struct rom_romItem* item);
-gchar* www_getFileNameWWW (const gchar* romName);
+void vlc_playVideo (const gchar* romName, GtkWidget* widget);
+void vlc_stopVideo (void);
 
 #endif
+
 

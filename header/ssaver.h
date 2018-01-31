@@ -19,18 +19,15 @@
  */
 
 
-/* www.h */
-#ifndef WWW_H
-#define WWW_H
+/* rom.h */
+#ifndef SSAVER_H
+#define SSAVER_H
 
-gboolean www_autoDownload;
-gchar*	 www_tilePath;
-gint     www_downloadingItm;
-
-void www_init (void);
-void www_free (void);
-void www_download (struct rom_romItem* item);
-gchar* www_getFileNameWWW (const gchar* romName);
+void ssaver_init (void);
+void ssaver_free (void);
+void ssaver_suspend (void);
+void ssaver_resume (void);
 
 #endif
+
 

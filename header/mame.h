@@ -22,10 +22,18 @@
 #ifndef MAME_H
 #define MAME_H
 
-void mame_gameList (void);
-gboolean mame_playGame (struct rom_romItem *item);
-gboolean mame_isRunning(void);
-//gboolean mame_dumpTo (gchar *cmdline, gchar *file);
+void     mame_gameList  (void);
+gboolean mame_playGame  (struct rom_romItem* item, const char* clone);
+gboolean mame_isRunning (void);
+gchar*   mame_getRomOf  (const gchar* romName);
+gchar**  mame_getDeviceRomOf (const gchar* romName);
+gboolean mame_needChd (const gchar* romName);
+
+struct inforom_info *mame_getInfoRom (const gchar* romName);
+void   mame_freeInfoRom (struct inforom_info *info);
+
+#define MAME_LIST_FULL_FILE   "listfull.txt"
+#define MAME_LIST_CLONES_FILE "listclones.txt"
 
 #endif
 

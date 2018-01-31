@@ -28,7 +28,10 @@
 #include "app.h"
 #include "view.h"
 #include "ui.h"
+#include "rescan.h"
 #include "uipref.h"
+#include "config.h"
+#include "ssaver.h"
 
 const gchar *app_authors[] = { "Strippato <strippato@gmail.com>",
                                NULL };
@@ -45,6 +48,7 @@ static gint app_status = 0;
 GActionEntry app_entries[] = {
     { "fullscreen", ui_actionFullscreen, NULL, "false", ui_actionChangeFullscreen},
     { "preference", uipref_showDialog, NULL, NULL, NULL},
+    { "rescan"    , rescan, NULL, NULL, NULL},
     { "sort"      , ui_actionSort, NULL, "true", NULL },
     { "about"     , ui_showAbout, NULL, NULL, NULL },
     { "quit"      , ui_quit     , NULL, NULL, NULL },
@@ -66,12 +70,20 @@ static void
 app_startup (void)
 {
     ui_init ();
+    // screen saver always disabled
+    if (cfg_keyInt ("SCREENSAVER_MODE") == 2) {
+        ssaver_suspend ();
+    }
 }
 
 
 static void
 app_shutdown (GtkApplication *app)
 {
+    // screen saver always disabled
+    //if (cfg_keyInt ("SCREENSAVER_MODE") == 2) {
+    //    ssaver_resume ();
+    //}
     ui_free ();
 }
 
@@ -81,10 +93,6 @@ main (gint argc, gchar *argv[])
     setlocale (LC_CTYPE, "");
     bindtextdomain (LOCALE_PACKAGE, LOCALE_DIR);
     textdomain (LOCALE_PACKAGE);
-
-#ifdef DEBUG_ROM_LIMIT
-    g_print ("WARNING DEBUG IS ACTIVE (max %i rom loaded)\n", DEBUG_ROM_LIMIT);
-#endif
 
     g_print (COLOR_RED APP_NAME " rel. " APP_VERSION COLOR_RESET"\n");
     g_print (APP_DESCRIPTION "\n\n");

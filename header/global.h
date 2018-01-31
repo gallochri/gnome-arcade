@@ -22,13 +22,7 @@
 #ifndef GLOBAL_H
 #define GLOBAL_H
 
-// load only DEBUG_ROM_LIMIT rom
-//#define DEBUG_ROM_LIMIT  5
-
-// show timing
-//#define DEBUG_TIMING
-
-// some globa color
+// some global color
 #define COLOR_NORMAL  "\x1B[0m"
 #define COLOR_RED     "\x1B[31m"
 #define COLOR_GREEN   "\x1B[32m"
@@ -40,7 +34,7 @@
 #define COLOR_RESET   "\033[0m"
 
 #define SUCCESS_MSG COLOR_GREEN "✓" COLOR_RESET
-#define FAIL_MSG 	COLOR_RED "✗" COLOR_RESET
+#define FAIL_MSG 	COLOR_RED   "✗" COLOR_RESET
 
 
 #endif
